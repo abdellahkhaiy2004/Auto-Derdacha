@@ -29,6 +29,14 @@ class MeetingDao extends DatabaseAccessor<AppDatabase> with _$MeetingDaoMixin {
       (select(meetings)..where((m) => m.draftId.equals(draftId)))
           .getSingleOrNull();
 
+  /// Returns every stored audio file path — used by orphan cleanup ([IP-0051]).
+  Future<List<String>> getAllAudioPaths() async {
+    final col = meetings.audioPath;
+    final query = selectOnly(meetings)..addColumns([col]);
+    final rows = await query.get();
+    return rows.map((r) => r.read(col)!).toList();
+  }
+
   /// Meetings in a date range — used by CalendarPage day bottom-sheet.
   Future<List<MeetingData>> getByDateRange(DateTime from, DateTime to) =>
       (select(meetings)

@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/errors/failures.dart';
+import '../../core/utils/audio_chunker.dart';
 import '../../domain/entities/meeting.dart';
 import '../local/app_database.dart';
 import '../local/meeting_dao.dart';
@@ -82,8 +83,8 @@ class MeetingRepository {
     return result;
   }
 
-  /// Re-runs transcription + summarization for a failed meeting using the
-  /// already-stored audio file ([IP-0049]).
+  /// Re-runs the full pipeline for a failed meeting using the stored audio
+  /// file ([IP-0049]).  Always skips the silence pre-check (user override).
   Future<Result<Meeting>> retryPipeline(
     int meetingId, {
     CancelToken? cancelToken,
@@ -94,12 +95,13 @@ class MeetingRepository {
     }
     final audioFile = File(row.audioPath);
     if (!audioFile.existsSync()) {
-      return const Err(FileTooLargeFailure()); // file gone — treat as error
+      return const Err(NetworkFailure('Fichier audio introuvable.'));
     }
     return _runPipeline(
       id: meetingId,
       audioFile: audioFile,
       cancelToken: cancelToken,
+      forceSend: true, // bypass silence check on explicit retry
     );
   }
 
@@ -107,24 +109,53 @@ class MeetingRepository {
     required int id,
     required File audioFile,
     CancelToken? cancelToken,
+    bool forceSend = false,
   }) async {
-    // Step 1 — Transcribe
-    await _dao.updatePipelineState(id, 'transcribing');
-    final transcriptResult = await _transcription.transcribe(
-      audioFile,
-      cancelToken: cancelToken,
-    );
-    if (transcriptResult.isErr) {
-      await _dao.updatePipelineState(id, 'failed');
-      return Err((transcriptResult as Err).failure);
+    // ── Silent audio pre-check (IP-0050) ──────────────────────────────────
+    // Heuristic: AAC-LC 16 kHz mono ≈ 4 KB/s. Threshold 1 KB/s is very
+    // conservative — catches only near-silent recordings. Skipped on retry
+    // (forceSend) so the user can override by pressing "Réessayer".
+    if (!forceSend) {
+      final row = await _dao.getById(id);
+      final dur = row?.durationSeconds ?? 0;
+      final fileSize = audioFile.lengthSync();
+      if (dur > 5 && fileSize < dur * 1000) {
+        await _dao.updatePipelineState(id, 'failed');
+        return const Err(EmptyAudioFailure(
+          'Enregistrement trop silencieux. Réessayez pour envoyer quand même.',
+        ));
+      }
     }
-    final transcript = (transcriptResult as Ok<String>).value;
-    await _dao.updateTranscript(id, transcript);
+
+    // ── Chunking > 25 MB (IP-0048) ────────────────────────────────────────
+    final chunks = await AudioChunker.chunk(audioFile);
+    final isChunked = chunks.length > 1;
+
+    // Step 1 — Transcribe (sequential chunks, transcripts joined with newline)
+    await _dao.updatePipelineState(id, 'transcribing');
+    var fullTranscript = '';
+
+    for (final chunk in chunks) {
+      final transcriptResult = await _transcription.transcribe(
+        chunk,
+        cancelToken: cancelToken,
+      );
+      if (transcriptResult.isErr) {
+        await _dao.updatePipelineState(id, 'failed');
+        if (isChunked) await AudioChunker.cleanup(audioFile, chunks);
+        return Err((transcriptResult as Err).failure);
+      }
+      if (fullTranscript.isNotEmpty) fullTranscript += '\n';
+      fullTranscript += (transcriptResult as Ok<String>).value;
+    }
+
+    if (isChunked) await AudioChunker.cleanup(audioFile, chunks);
+    await _dao.updateTranscript(id, fullTranscript);
 
     // Step 2 — Summarize
     await _dao.updatePipelineState(id, 'summarizing');
     final summaryResult = await _summary.summarize(
-      transcript,
+      fullTranscript,
       cancelToken: cancelToken,
     );
     if (summaryResult.isErr) {
@@ -134,7 +165,7 @@ class MeetingRepository {
     final summaryMd = (summaryResult as Ok<String>).value;
 
     // Detect dominant language from first non-empty content line (heuristic).
-    final detectedLang = _heuristicLang(transcript);
+    final detectedLang = _heuristicLang(fullTranscript);
 
     await _dao.updateSummary(id, summaryMd, detectedLang);
 
@@ -146,6 +177,21 @@ class MeetingRepository {
 
   Stream<Meeting?> watchById(int id) =>
       _dao.watchById(id).map((r) => r == null ? null : _rowToEntity(r));
+
+  /// Polls until the DB row for [draftId] appears (inserted at the start of
+  /// [processRecording]), then delegates to [watchById] for live state updates.
+  Stream<Meeting?> watchByDraftId(String draftId) async* {
+    int? id;
+    while (id == null) {
+      final row = await _dao.getByDraftId(draftId);
+      if (row != null) {
+        id = row.id;
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
+    yield* watchById(id);
+  }
 
   Stream<List<Meeting>> watchByFolder(int folderId) =>
       _dao.watchByFolder(folderId).map((rows) => rows.map(_rowToEntity).toList());

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -29,6 +31,7 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   bool _reSummarizing = false;
+  bool _retrying = false;
 
   int get _id => int.tryParse(widget.meetingId) ?? -1;
 
@@ -184,6 +187,14 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage>
     if (mounted) setState(() => _reSummarizing = false);
   }
 
+  /// Retry the full pipeline for a failed meeting ([IP-0049]).
+  /// Calls retryPipeline which bypasses the silence check (forceSend:true).
+  Future<void> _retryProcessing() async {
+    setState(() => _retrying = true);
+    await ref.read(meetingRepositoryProvider).retryPipeline(_id);
+    if (mounted) setState(() => _retrying = false);
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -303,6 +314,12 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage>
               LinearProgressIndicator(
                 color: colorScheme.tertiary,
                 backgroundColor: colorScheme.surfaceContainerHighest,
+              ),
+            // ── Retry banner (IP-0049) ────────────────────────────────────
+            if (meeting.pipelineState == PipelineState.failed)
+              _RetryBanner(
+                retrying: _retrying,
+                onRetry: _retrying ? null : _retryProcessing,
               ),
             // ── Header card ───────────────────────────────────────────────
             _MeetingHeader(meeting: meeting),
@@ -570,9 +587,10 @@ class _InfoTab extends StatelessWidget {
 
   static String _fileSize(String path) {
     try {
-      final bytes =
-          (path.length * 8); // placeholder; real stat in full impl
-      return '${(bytes / 1024).toStringAsFixed(0)} KB (approx.)';
+      final bytes = File(path).lengthSync();
+      if (bytes < 1024) return '$bytes B';
+      if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     } catch (_) {
       return 'Inconnu';
     }
@@ -619,6 +637,45 @@ class _InfoTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Retry banner ──────────────────────────────────────────────────────────────
+
+class _RetryBanner extends StatelessWidget {
+  const _RetryBanner({required this.retrying, required this.onRetry});
+  final bool retrying;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return MaterialBanner(
+      backgroundColor: cs.errorContainer,
+      content: Text(
+        retrying
+            ? 'Relance du traitement en cours…'
+            : 'Le traitement a échoué. Réessayez pour relancer la transcription.',
+        style: TextStyle(color: cs.onErrorContainer),
+      ),
+      actions: [
+        if (retrying)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          TextButton(
+            onPressed: onRetry,
+            child: Text('Réessayer',
+                style: TextStyle(color: cs.onErrorContainer)),
+          ),
+      ],
     );
   }
 }
