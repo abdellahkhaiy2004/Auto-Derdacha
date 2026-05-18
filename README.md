@@ -269,3 +269,95 @@ The notes card is hidden when the recorder is idle so the empty landing screen s
 
 **Migration notice.** Existing databases will auto-upgrade from schema v1 to v2 on first launch after this update; the new column starts empty for past meetings.
 
+
+
+## Feature notes — Part 16
+
+### Android 15 and Android 16 support ([IP-0062])
+
+The app now compiles and targets **API level 36 (Android 16)**, which also enables every Android 15 (API 35) platform behavior. The install floor is unchanged — `minSdk` stays at Flutter's default (API 21, Android 5.0), so the same range of devices keeps working.
+
+**What this means as an operator.**
+
+- The release manifest now declares all the runtime permissions the app needs explicitly: `INTERNET`, `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `USE_EXACT_ALARM`, `WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`. No more relying on transitive plugin manifests.
+- On Android 13+ the first scheduled reminder will prompt for notification permission. Accept it once.
+- On Android 14+ exact-alarm scheduling for calendar reminders is granted via `USE_EXACT_ALARM` (no special user trip to system settings needed for the timekeeping use case).
+- After a reboot, pending reminders are automatically re-armed (`RECEIVE_BOOT_COMPLETED`).
+- Edge-to-edge is enforced by Android 15+ — Material 3 `Scaffold` already handles insets, so no visible regression is expected. If a real device shows a control clipped by the gesture bar, wrap that screen's body in `SafeArea(bottom: true)`.
+
+### Troubleshooting on Android 15 / 16
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Notifications never appear on Android 13+ | `POST_NOTIFICATIONS` denied at first run | Settings → Apps → auto_derdacha → Notifications → enable |
+| Exact reminders fire late on Android 12 | OEM aggressively batched the alarm | `permission_handler`'s `scheduleExactAlarm` request is honored on stock Android; on heavy-skin OEMs add the app to the battery-optimisation exception list |
+| `INSTALL_FAILED_OLDER_SDK` when sideloading | Device runs API < 21 (Android < 5.0) | Outside support window; upgrade the device |
+| App crashes on Android 15 device with 16 KB pages | A native plugin still ships 4 KB-aligned .so files | Bump the affected plugin to a 16 KB-ready minor (e.g. `sqlite3_flutter_libs ^0.5.27+`) in a separate work loop and rebuild |
+| FAB hidden behind the gesture bar on Android 15 | Edge-to-edge enforcement, screen body lacks bottom inset | Wrap the body in `SafeArea(bottom: true)` |
+
+### Building for Android 15 / 16
+
+No new command. The existing flow works as-is:
+
+```bash
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter build apk --debug      # or --release once signing is wired up
+```
+
+The build now picks up `compileSdk = 36` / `targetSdk = 36` from `android/app/build.gradle.kts` regardless of which Flutter SDK constant the local installation ships with.
+
+### Troubleshooting — silent recordings (Android)
+
+If a meeting finishes in state **Terminé** but the Transcription card looks empty:
+
+1. Confirm the **microphone is not blocked at the OS level**:
+   - Pull down the notification shade and look for a **"Microphone access blocked"** tile or a mic-mute icon — toggle it off.
+   - Settings → Privacy / Privacy controls → **Microphone access** → must be **On**.
+   - Settings → Apps → auto_derdacha → Permissions → **Microphone** → **Allowed**.
+2. Start a new recording inside the app and **watch the waveform on the record screen**. If the waveform stays flat at zero while you speak, the OS is silencing the input; no code path on the client side can recover the audio.
+3. As of [P-0117] the client now rejects transcripts with fewer than 3 letter-or-digit characters (typical Whisper silence hallucinations: `.`, `you`, `Music`, the Amara.org subtitle boilerplate). When this happens you will see **"Enregistrement silencieux. Vérifiez le microphone et réessayez."** on the processing screen instead of a silent success.
+
+## Branding — "meet-recap" ([IP-0063])
+
+As of [IP-0063] the application's launcher label is **meet-recap**. This is a display-only rename via `<application android:label="meet-recap">` in `android/app/src/main/AndroidManifest.xml`. The internal codebase identifier stays as `auto_derdacha` (Dart package, Android `applicationId = com.autoderdacha.auto_derdacha`, Drift DB filename) so that:
+
+- Existing installs upgrade in place — no data loss, no fresh install.
+- Earlier sections of this README that reference `auto-dardacha` remain historically accurate (this file is append-only per `instructions.md` §2.1).
+
+**Where you will see the new name.** Home-screen launcher icon caption, recents (overview) task title, and the default activity label.
+
+**Where the old name still appears (intentionally).** App-info screen on the device (shows `com.autoderdacha.auto_derdacha`), build artefact paths (`build\app\outputs\flutter-apk\...`), Dart import statements, and the Drift database file on disk. None of these are user-visible during normal app use.
+
+**Promoting to a full rename later.** If you decide to rename the applicationId too, plan it as a dedicated migration: export Drift data, change `applicationId` and `namespace`, reinstall, re-import. Users without the migration step will lose access to old meetings because Android treats a new applicationId as a different app with isolated data.
+
+### Launcher icon ([IP-0064])
+
+The Android launcher icon source is `assets/icon/app_icon.png` (1024×1024 transparent PNG). The mipmap density buckets and the adaptive-icon XML under `android/app/src/main/res/mipmap-*/` are **generated** — do not hand-edit them.
+
+**Regenerate after editing the source:**
+```bash
+dart run flutter_launcher_icons
+```
+
+The generator pulls its config from the `flutter_launcher_icons:` block at the bottom of `pubspec.yaml`. The adaptive icon background is the brand violet `#7C3AED` so the masked region (squircle / circle / rounded square, depending on launcher) always shows brand colour around the foreground microphone.
+
+### Launcher icon refresh ([IP-0065])
+
+The launcher icon source was refreshed to a pre-tiled rounded-square design (file `assets/icon/app_icon.png`, plus a lavender alt at `assets/icon/app_icon_light.png`). Because the source now embeds its own dark tile, the adaptive-icon background in `pubspec.yaml` is `#15172A` (matches the tile) — **not** the brand violet `#7C3AED` that the earlier transparent-glyph source used. Rule of thumb:
+
+| Foreground type | Set `adaptive_icon_background` to |
+| --- | --- |
+| Transparent-bg glyph | Brand colour (`#7C3AED` in this codebase) |
+| Pre-tiled icon (tile baked in) | The tile's own background colour (`#15172A` here) |
+
+The display label was also rewritten from `meet-recap` (kebab) to `Meet Recap` (title case + space) per Android's launcher-naming convention.
+
+## Feature notes — Slices A–D ([IP-0066..0069])
+
+The four-part owner request from [P-0126] landed across four commits:
+
+- **Slice A — Waveform fix** ([IP-0066], [SL-0069]). The microphone amplitude bars now animate on every recording, not just the first one. Internal lifecycle fix; no user-facing setting.
+- **Slice B — Folder multi-select** ([IP-0067], [SL-0070]). Long-press any folder card on the Dossiers tab to enter selection mode; tap to add/remove; the contextual appbar offers a batch Supprimer. Inbox is exempt. Android Back exits selection mode without leaving the page.
+- **Slice C — Meeting multi-select inside a folder** ([IP-0068], [SL-0071]). Same long-press contextual-appbar pattern on meeting tiles inside FolderDetailPage. Two batch actions: Déplacer vers (opens a folder picker bottom sheet) and Supprimer (confirmation dialog warns audio is also deleted). Calendar day-sheet multi-select is intentionally deferred — modal-inside-modal UX issue.
+- **Slice D — Historique tab** ([IP-0069], [SL-0072]). New bottom-nav destination between Calendrier and Dossiers. Reverse-chronological list of every meeting, grouped by local calendar day with inline French date headers. Reuses the meeting selection controller from slice C, but exposes only batch delete (move-to-folder stays scoped to FolderDetailPage where the source/target relationship is unambiguous).

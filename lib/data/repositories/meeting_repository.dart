@@ -248,6 +248,10 @@ class MeetingRepository {
   Stream<List<Meeting>> watchByFolder(int folderId) =>
       _dao.watchByFolder(folderId).map((rows) => rows.map(_rowToEntity).toList());
 
+  /// [IP-0069] Watch every meeting across all folders, newest first.
+  Stream<List<Meeting>> watchAll() =>
+      _dao.watchAll().map((rows) => rows.map(_rowToEntity).toList());
+
   Future<Meeting?> getById(int id) async {
     final row = await _dao.getById(id);
     return row == null ? null : _rowToEntity(row);

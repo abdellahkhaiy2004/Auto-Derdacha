@@ -58,6 +58,15 @@ class TranscriptionApi {
       if (text == null || text.isEmpty) {
         return const Err(EmptyAudioFailure('Transcription vide reçue.'));
       }
+      // [P-0117] Whisper hallucinates tiny tokens (".", " ", short punctuation)
+      // on near-silent audio. Treat anything with <3 alphanumeric chars as silence
+      // so the UI surfaces "Traitement échoué" instead of an invisible transcript.
+      final meaningful = text.replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+      if (meaningful.length < 3) {
+        return const Err(EmptyAudioFailure(
+          'Enregistrement silencieux. Vérifiez le microphone et réessayez.',
+        ));
+      }
       return Ok(text);
     } on DioException catch (e) {
       return Err(mapDioError(e));

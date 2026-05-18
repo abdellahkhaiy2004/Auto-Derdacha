@@ -70,6 +70,22 @@ dev_dependencies:
   drift_dev: ^2.18.0
   build_runner: ^2.4.9
   riverpod_generator: ^2.4.0
+  # [IP-0064] generates Android launcher icon set from assets/icon/app_icon.png
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/app_icon.png
+    - assets/icon/app_icon_light.png
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  # [IP-0065] tile-aware: source PNG already contains a dark designed tile, so
+  # adaptive background must match the tile (not the brand violet) — otherwise
+  # circular masks reveal violet bleed around the tile corners.
+  adaptive_icon_background: "#15172A"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"

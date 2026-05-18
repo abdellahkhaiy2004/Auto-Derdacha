@@ -18,11 +18,21 @@ class FolderCard extends StatelessWidget {
     super.key,
     required this.folder,
     required this.onTap,
+    this.onLongPress,
+    this.selected = false,
+    this.selectionMode = false,
     this.gridIndex = 0,
   });
 
   final Folder folder;
   final VoidCallback onTap;
+  // [IP-0067] long-press enters selection mode by toggling this card in.
+  final VoidCallback? onLongPress;
+  // [IP-0067] visual: outlined border + check overlay when true.
+  final bool selected;
+  // [IP-0067] suppresses the idle bob animation while any selection is active
+  // so the grid stays still and the user can tap precisely.
+  final bool selectionMode;
   final int gridIndex;
 
   @override
@@ -30,7 +40,8 @@ class FolderCard extends StatelessWidget {
     final baseColor = AppColors.hexToColor(folder.colorHex);
     final dimColor = baseColor.withAlpha(179); // ≈ 70 % opacity
     final textColor = AppColors.contrastOn(baseColor);
-    final animate = animationsEnabled(context);
+    final animate = animationsEnabled(context) && !selectionMode;
+    final cs = Theme.of(context).colorScheme;
 
     final card = Hero(
       tag: 'folder_card_${folder.id}',
@@ -39,6 +50,7 @@ class FolderCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           borderRadius: BorderRadius.circular(20),
           child: Ink(
             decoration: BoxDecoration(
@@ -48,6 +60,9 @@ class FolderCard extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [baseColor, dimColor],
               ),
+              border: selected
+                  ? Border.all(color: cs.onSurface, width: 3)
+                  : null,
               boxShadow: [
                 BoxShadow(
                   color: baseColor.withAlpha(77), // 30 %
@@ -56,11 +71,13 @@ class FolderCard extends StatelessWidget {
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   // ── Icon ────────────────────────────────────────────────
                   Container(
                     width: 32,
@@ -94,8 +111,28 @@ class FolderCard extends StatelessWidget {
                           color: textColor.withAlpha(204), // 80 %
                         ),
                   ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: cs.onSurface,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: cs.surface,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

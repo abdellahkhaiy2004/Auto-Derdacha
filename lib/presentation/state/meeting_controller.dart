@@ -55,7 +55,10 @@ class MeetingController extends Notifier<MeetingState> {
   static const _startUC = StartRecording();
   static const _stopUC  = StopAndProcess();
 
-  late final AudioRecorder _recorder;
+  // [IP-0066] non-final: recreated on every startRecording so the record-plugin
+  // amplitude timer is re-armed for each session (the timer is not re-created
+  // when stop() then start() are called on the same instance in record 5.x).
+  late AudioRecorder _recorder;
   Timer? _ticker;
   StreamSubscription<Amplitude>? _amplitudeSub;
   Duration _elapsed = Duration.zero;
@@ -77,6 +80,13 @@ class MeetingController extends Notifier<MeetingState> {
   // ── Public API ─────────────────────────────────────────────────────────
 
   Future<void> startRecording({String? folderId}) async {
+    // [IP-0066] Dispose the previous recorder + amplitude subscription before
+    // each session — record 5.x does not re-arm onAmplitudeChanged after stop().
+    await _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    await _recorder.dispose();
+    _recorder = AudioRecorder();
+
     final draftId = _startUC();
     _elapsed = Duration.zero;
 

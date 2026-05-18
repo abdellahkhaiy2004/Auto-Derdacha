@@ -1,6 +1,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network access (Groq STT/LLM, translation). Required at runtime since release builds do not inject it. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Audio capture for in-app recording (record plugin). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Android 13+ runtime opt-in for displaying notifications (flutter_local_notifications). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Android 12+ gating for exact-time scheduled notifications (meeting reminders). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- Keep CPU awake during long transcription/summary pipelines. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Re-arm scheduled notifications after device reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="auto_derdacha"
+        android:label="Meet Recap"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

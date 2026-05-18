@@ -18,6 +18,13 @@ class MeetingDao extends DatabaseAccessor<AppDatabase> with _$MeetingDaoMixin {
             ..orderBy([(m) => OrderingTerm.desc(m.createdAt)]))
           .watch();
 
+  /// [IP-0069] Watch every meeting across all folders, newest first.
+  /// Used by HistoryPage. Drift re-emits on any insert/update/delete.
+  Stream<List<MeetingData>> watchAll() =>
+      (select(meetings)
+            ..orderBy([(m) => OrderingTerm.desc(m.createdAt)]))
+          .watch();
+
   /// Watch a single meeting — used by MeetingDetailPage for live pipeline state.
   Stream<MeetingData?> watchById(int id) =>
       (select(meetings)..where((m) => m.id.equals(id))).watchSingleOrNull();

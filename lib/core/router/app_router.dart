@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../presentation/pages/calendar_page.dart';
 import '../../presentation/pages/folder_detail_page.dart';
 import '../../presentation/pages/folders_page.dart';
+import '../../presentation/pages/history_page.dart';
 import '../../presentation/pages/home_shell.dart';
 import '../../presentation/pages/meeting_detail_page.dart';
 import '../../presentation/pages/new_folder_page.dart';
@@ -69,7 +70,28 @@ final routerProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          // Tab 2 — Folders
+          // Tab 2 — History ([IP-0069])
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/history',
+              pageBuilder: (c, s) => _slide(s, const HistoryPage()),
+              routes: [
+                // Parallel meeting route so opening a meeting from Historique
+                // stays inside this branch (same pattern as /calendar in
+                // [P-0101]).
+                GoRoute(
+                  path: 'meetings/:meetingId',
+                  pageBuilder: (c, s) => _slide(
+                    s,
+                    MeetingDetailPage(
+                      meetingId: s.pathParameters['meetingId']!,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ]),
+          // Tab 3 — Folders
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/folders',
@@ -112,7 +134,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               ],
             ),
           ]),
-          // Tab 3 — Settings
+          // Tab 4 — Settings
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/settings',

@@ -82,6 +82,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               label: 'Calendrier',
             ),
             NavigationDestination(
+              icon: Icon(Icons.history_outlined),
+              selectedIcon: Icon(Icons.history),
+              label: 'Historique',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.folder_outlined),
               selectedIcon: Icon(Icons.folder),
               label: 'Dossiers',
