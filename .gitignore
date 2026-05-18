@@ -38,3 +38,12 @@ build/
 
 # Secrets — never commit the real env file
 /.env
+
+# Governance files (local only)
+instructions.md
+architecture.md
+implementation_plan.md
+personas.md
+progress.md
+student_lab.md
+UML.md
