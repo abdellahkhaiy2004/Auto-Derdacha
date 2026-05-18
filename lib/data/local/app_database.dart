@@ -21,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -38,6 +38,12 @@ class AppDatabase extends _$AppDatabase {
               isInbox: const Value(true),
             ),
           );
+        },
+        onUpgrade: (m, from, to) async {
+          // v2 ([IP-0061]): add meetings.user_notes (additive, default '').
+          if (from < 2) {
+            await m.addColumn(meetings, meetings.userNotes);
+          }
         },
       );
 }

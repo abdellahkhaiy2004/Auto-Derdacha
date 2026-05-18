@@ -252,3 +252,20 @@ The Calendrier tab now has a chip row above the month grid. Each chip represents
 3. When **exactly one** folder is active, tapping the **Planifier** FAB opens the scheduling form with that folder pre-selected, so you can quickly add multiple events to the same folder without re-picking each time.
 
 The filter is per-session — it resets when you close the app. The chip row is hidden when you have fewer than two folders (nothing to filter).
+
+---
+
+## Feature notes — Part 15
+
+### Notes pendant la réunion ([IP-0061])
+
+A new card "**Notes de réunion**" appears on the Record page as soon as recording starts. Type free-form notes — decisions to remember, names to capture, points to clarify. They are:
+
+- **Persisted** with the meeting (new `meetings.user_notes` column, schema v2 migration). Survives app restart, retries, and re-summarisation.
+- **Sent to the LLM** as part of the summarisation prompt. The system prompt now contains a rule asking the model to prioritise the notes in the **Décisions**, **Action items**, and **Résumé global** sections. The transcript is still the primary source — the notes act as a guided emphasis from the user.
+- **Displayed separately** in the meeting detail page. The "Transcript" tab now shows two cards: one for the raw transcription and one ("Mes notes") for the notes you wrote. Each card has its own copy button. When you took no notes, the second card simply shows "Aucune note prise pendant cette réunion." in italic.
+
+The notes card is hidden when the recorder is idle so the empty landing screen stays minimal. It reappears whenever a session is active or paused. Typing during a `Paused` state is fine — notes are part of the session, not the audio.
+
+**Migration notice.** Existing databases will auto-upgrade from schema v1 to v2 on first launch after this update; the new column starts empty for past meetings.
+

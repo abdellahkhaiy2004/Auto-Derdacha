@@ -42,6 +42,9 @@ class Meetings extends Table {
   TextColumn get transcript => text().withDefault(const Constant(''))();
   TextColumn get summary => text().withDefault(const Constant(''))();
 
+  /// Free-form notes typed by the user during the meeting ([IP-0061], v2).
+  TextColumn get userNotes => text().withDefault(const Constant(''))();
+
   /// PipelineState stored as string: pending/transcribing/summarizing/done/failed.
   TextColumn get pipelineState =>
       text().withDefault(const Constant('pending'))();

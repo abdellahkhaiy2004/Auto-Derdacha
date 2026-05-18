@@ -43,6 +43,7 @@ Liste à puces des questions ouvertes, risques identifiés ou points non résolu
 
 5. Si une section ne contient aucune information pertinente, écris "Aucun" sous son titre.
 6. Ne génère aucun texte avant le premier ## ni après la dernière section.
+7. Si l'utilisateur a fourni des "Notes personnelles" en complément du transcript, intègre-les en priorité dans les sections **Décisions**, **Action items**, et **Résumé global** — ces notes reflètent ce que l'utilisateur considère comme important et peuvent compléter ou corriger ce que le transcript décrit.
 
 Exemple de structure attendue (contenu fictif) :
 
@@ -74,11 +75,19 @@ La réunion a porté sur la planification budgétaire du Q3 et le changement de 
   /// [cancelToken] is threaded through for ProcessingPage cancellation ([IP-0058]).
   Future<Result<String>> summarize(
     String transcript, {
+    String userNotes = '',
     CancelToken? cancelToken,
   }) async {
     if (transcript.trim().isEmpty) {
       return const Err(EmptyAudioFailure('Transcript vide, résumé impossible.'));
     }
+
+    final notes = userNotes.trim();
+    final userMessage = notes.isEmpty
+        ? 'Voici le transcript de la réunion :\n\n$transcript'
+        : 'Voici le transcript de la réunion :\n\n$transcript\n\n'
+            '---\n'
+            'Notes personnelles de l\'utilisateur (à prioriser) :\n\n$notes';
 
     try {
       final response = await _client.dio.post<Map<String, dynamic>>(
@@ -90,11 +99,7 @@ La réunion a porté sur la planification budgétaire du Q3 et le changement de 
           'max_tokens': 2048,
           'messages': [
             {'role': 'system', 'content': _systemPrompt},
-            {
-              'role': 'user',
-              'content':
-                  'Voici le transcript de la réunion :\n\n$transcript',
-            },
+            {'role': 'user', 'content': userMessage},
           ],
         },
       );

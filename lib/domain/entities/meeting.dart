@@ -33,6 +33,7 @@ class Meeting {
     required this.detectedLanguage,
     required this.createdAt,
     this.linkedEventId,
+    this.userNotes = '',
   });
 
   final int id;
@@ -48,6 +49,9 @@ class Meeting {
   final DateTime createdAt;
   final int? linkedEventId;
 
+  /// Free-form notes the user typed during recording ([IP-0061]).
+  final String userNotes;
+
   Meeting copyWith({
     int? id,
     String? draftId,
@@ -61,6 +65,7 @@ class Meeting {
     String? detectedLanguage,
     DateTime? createdAt,
     int? linkedEventId,
+    String? userNotes,
   }) =>
       Meeting(
         id: id ?? this.id,
@@ -75,5 +80,6 @@ class Meeting {
         detectedLanguage: detectedLanguage ?? this.detectedLanguage,
         createdAt: createdAt ?? this.createdAt,
         linkedEventId: linkedEventId ?? this.linkedEventId,
+        userNotes: userNotes ?? this.userNotes,
       );
 }

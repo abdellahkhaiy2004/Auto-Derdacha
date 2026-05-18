@@ -86,6 +86,7 @@ class _ProcessingPageState extends ConsumerState<ProcessingPage> {
             forcedLanguage: forcedLanguage,
             translateTo: translateTo,
             latinizeDarija: latinizeDarija,
+            userNotes: result.userNotes,
           )
           .then((r) {
         if (!mounted) return;

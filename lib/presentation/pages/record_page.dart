@@ -21,7 +21,15 @@ class RecordPage extends ConsumerStatefulWidget {
 }
 
 class _RecordPageState extends ConsumerState<RecordPage> {
+  final TextEditingController _notesCtrl = TextEditingController();
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+  @override
+  void dispose() {
+    _notesCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +38,14 @@ class _RecordPageState extends ConsumerState<RecordPage> {
     final isRecording = rs is Recording;
     final isPaused    = rs is Paused;
     final isActive    = isRecording || isPaused;
+
+    // Reset the local notes field when a fresh recording session begins so
+    // a stale value from a previous meeting cannot leak in.
+    if (!isActive && _notesCtrl.text.isNotEmpty && state.userNotes.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _notesCtrl.clear();
+      });
+    }
 
     return PopScope(
       // Block hardware back while recording (architecture §9c).
@@ -55,73 +71,85 @@ class _RecordPageState extends ConsumerState<RecordPage> {
           ],
         ),
         body: SafeArea(
-          child: Column(
-            children: [
-              // Error banner
-              if (rs is RecordingError) _ErrorBanner(
-                message: rs.message,
-                onDismiss: () =>
-                    ref.read(meetingControllerProvider.notifier).clearError(),
-              ),
-
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // ── Status label ────────────────────────────────────
-                    _StatusLabel(rs: rs),
-
-                    const SizedBox(height: 12),
-
-                    // ── Elapsed timer ───────────────────────────────────
-                    _ElapsedTimer(rs: rs),
-
-                    const SizedBox(height: 40),
-
-                    // ── Record button ────────────────────────────────────
-                    RecordButton(
-                      isRecording: isRecording,
-                      onTap: isActive ? _stopRecording : _startRecording,
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // ── Waveform (visible only while recording) ──────────
-                    AnimatedOpacity(
-                      opacity: isRecording ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 300),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: WaveformIndicator(
-                          amplitude: isRecording ? (rs as Recording).amplitude : 0,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ── Pause / hint text ────────────────────────────────
-                    if (isRecording)
-                      TextButton.icon(
-                        onPressed: _pauseRecording,
-                        icon: const Icon(Icons.pause_rounded),
-                        label: const Text('Pause'),
-                      )
-                    else if (!isActive)
-                      Text(
-                        'Appuyez pour commencer',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.5),
-                            ),
-                      ),
-                  ],
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Error banner
+                if (rs is RecordingError) _ErrorBanner(
+                  message: rs.message,
+                  onDismiss: () =>
+                      ref.read(meetingControllerProvider.notifier).clearError(),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 24),
+
+                // ── Status label ────────────────────────────────────────
+                _StatusLabel(rs: rs),
+
+                const SizedBox(height: 12),
+
+                // ── Elapsed timer ───────────────────────────────────────
+                _ElapsedTimer(rs: rs),
+
+                const SizedBox(height: 32),
+
+                // ── Record button ──────────────────────────────────────
+                RecordButton(
+                  isRecording: isRecording,
+                  onTap: isActive ? _stopRecording : _startRecording,
+                ),
+
+                const SizedBox(height: 24),
+
+                // ── Waveform (visible only while recording) ────────────
+                AnimatedOpacity(
+                  opacity: isRecording ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: WaveformIndicator(
+                      amplitude:
+                          isRecording ? (rs as Recording).amplitude : 0,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Pause / hint text ──────────────────────────────────
+                if (isRecording)
+                  TextButton.icon(
+                    onPressed: _pauseRecording,
+                    icon: const Icon(Icons.pause_rounded),
+                    label: const Text('Pause'),
+                  )
+                else if (!isActive)
+                  Text(
+                    'Appuyez pour commencer',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.5),
+                        ),
+                  ),
+
+                // ── Notes card (IP-0061) ───────────────────────────────
+                // Visible only during an active session so the empty
+                // landing state stays minimal.
+                if (isActive)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                    child: _NotesCard(
+                      controller: _notesCtrl,
+                      onChanged: (v) => ref
+                          .read(meetingControllerProvider.notifier)
+                          .updateNotes(v),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -285,6 +313,82 @@ class _ElapsedTimer extends StatelessWidget {
                 ? Theme.of(context).colorScheme.onSurface
                 : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
           ),
+    );
+  }
+}
+
+class _NotesCard extends StatelessWidget {
+  const _NotesCard({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.edit_note_rounded, size: 20, color: cs.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Notes de réunion',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ces notes seront ajoutées au résumé et conservées avec la réunion.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              onChanged: onChanged,
+              minLines: 4,
+              maxLines: 8,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText:
+                    'Décisions importantes, noms à retenir, points à clarifier…',
+                filled: true,
+                fillColor: cs.surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.outlineVariant),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.outlineVariant),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.primary, width: 1.5),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -59,6 +59,11 @@ class MeetingDao extends DatabaseAccessor<AppDatabase> with _$MeetingDaoMixin {
         MeetingsCompanion(pipelineState: Value(state)),
       );
 
+  Future<void> updateUserNotes(int id, String notes) =>
+      (update(meetings)..where((m) => m.id.equals(id))).write(
+        MeetingsCompanion(userNotes: Value(notes)),
+      );
+
   Future<void> updateTranscript(int id, String transcript) =>
       (update(meetings)..where((m) => m.id.equals(id))).write(
         MeetingsCompanion(transcript: Value(transcript)),

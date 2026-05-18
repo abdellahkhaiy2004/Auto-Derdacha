@@ -58,6 +58,7 @@ class MeetingRepository {
     String? forcedLanguage,   // IP-0053: null = Whisper auto-detect
     String? translateTo,      // P-0097: null = no translation, else 'fr'/'en'
     bool latinizeDarija = false, // P-0097: rewrite Arabic Darija in Latin
+    String userNotes = '',    // IP-0061: free-form notes captured during recording
   }) async {
     final effectiveTitle = title.isEmpty
         ? 'Réunion ${DateTime.now().toLocal().toString().substring(0, 16)}'
@@ -73,6 +74,7 @@ class MeetingRepository {
         durationSeconds: Value(durationSeconds),
         pipelineState: const Value('pending'),
         linkedEventId: Value(linkedEventId),
+        userNotes: Value(userNotes),
       ),
     );
 
@@ -83,6 +85,7 @@ class MeetingRepository {
       forcedLanguage: forcedLanguage,
       translateTo: translateTo,
       latinizeDarija: latinizeDarija,
+      userNotes: userNotes,
     );
 
     // IP-0039: after success, link the CalendarEvent row to this meeting.
@@ -118,6 +121,7 @@ class MeetingRepository {
       forcedLanguage: forcedLanguage,
       translateTo: translateTo,
       latinizeDarija: latinizeDarija,
+      userNotes: row.userNotes,
     );
   }
 
@@ -129,6 +133,7 @@ class MeetingRepository {
     String? forcedLanguage,  // IP-0053: null = Whisper auto-detect
     String? translateTo,        // P-0097
     bool latinizeDarija = false, // P-0097
+    String userNotes = '',      // IP-0061
   }) async {
     // ── Silent audio pre-check (IP-0050) ──────────────────────────────────
     // Heuristic: AAC-LC 16 kHz mono ≈ 4 KB/s. Threshold 1 KB/s is very
@@ -202,6 +207,7 @@ class MeetingRepository {
     await _dao.updatePipelineState(id, 'summarizing');
     final summaryResult = await _summary.summarize(
       fullTranscript,
+      userNotes: userNotes,
       cancelToken: cancelToken,
     );
     if (summaryResult.isErr) {
@@ -281,8 +287,11 @@ class MeetingRepository {
     }
 
     await _dao.updatePipelineState(meetingId, 'summarizing');
-    final summaryResult =
-        await _summary.summarize(row.transcript, cancelToken: cancelToken);
+    final summaryResult = await _summary.summarize(
+      row.transcript,
+      userNotes: row.userNotes,
+      cancelToken: cancelToken,
+    );
     if (summaryResult.isErr) {
       await _dao.updatePipelineState(meetingId, 'failed');
       return Err((summaryResult as Err).failure);
@@ -314,6 +323,7 @@ class MeetingRepository {
         detectedLanguage: row.detectedLanguage,
         createdAt: row.createdAt,
         linkedEventId: row.linkedEventId,
+        userNotes: row.userNotes,
       );
 
   static PipelineState _parsePipelineState(String s) => switch (s) {

@@ -18,6 +18,7 @@ class MeetingState {
     this.audioPath,
     this.folderId,
     this.result,
+    this.userNotes = '',
   });
 
   final RecordingState recordingState;
@@ -26,12 +27,17 @@ class MeetingState {
   final String? folderId;
   final RecordingResult? result; // set after a successful stop
 
+  /// Notes typed by the user during recording ([IP-0061]). Cleared on each
+  /// new startRecording so a stale value cannot leak into a fresh meeting.
+  final String userNotes;
+
   MeetingState copyWith({
     RecordingState? recordingState,
     String? draftId,
     String? audioPath,
     String? folderId,
     RecordingResult? result,
+    String? userNotes,
   }) =>
       MeetingState(
         recordingState: recordingState ?? this.recordingState,
@@ -39,6 +45,7 @@ class MeetingState {
         audioPath: audioPath ?? this.audioPath,
         folderId: folderId ?? this.folderId,
         result: result ?? this.result,
+        userNotes: userNotes ?? this.userNotes,
       );
 }
 
@@ -79,6 +86,7 @@ class MeetingController extends Notifier<MeetingState> {
       draftId: draftId,
       audioPath: path,
       folderId: folderId,
+      userNotes: '',
     );
 
     // Elapsed timer — ticks every second.
@@ -150,6 +158,7 @@ class MeetingController extends Notifier<MeetingState> {
       audioFile: file,
       elapsed: _elapsed,
       folderId: state.folderId,
+      userNotes: state.userNotes,
     );
 
     if (result == null) {
@@ -170,6 +179,12 @@ class MeetingController extends Notifier<MeetingState> {
     if (state.recordingState is RecordingError) {
       state = state.copyWith(recordingState: const Idle());
     }
+  }
+
+  /// Updates the user notes typed during recording ([IP-0061]). Called on
+  /// every TextField change in RecordPage's notes card.
+  void updateNotes(String notes) {
+    state = state.copyWith(userNotes: notes);
   }
 }
 

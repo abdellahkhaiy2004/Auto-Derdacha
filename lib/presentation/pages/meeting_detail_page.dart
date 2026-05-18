@@ -329,7 +329,10 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage>
                 controller: _tabs,
                 children: [
                   _SummaryTab(summary: meeting.summary),
-                  _TranscriptTab(transcript: meeting.transcript),
+                  _TranscriptTab(
+                    transcript: meeting.transcript,
+                    userNotes: meeting.userNotes,
+                  ),
                   _InfoTab(
                     meeting: meeting,
                     onReSummarize:
@@ -515,35 +518,108 @@ class _SummaryTab extends StatelessWidget {
 // ── Transcript tab ─────────────────────────────────────────────────────────────
 
 class _TranscriptTab extends StatelessWidget {
-  const _TranscriptTab({required this.transcript});
+  const _TranscriptTab({
+    required this.transcript,
+    required this.userNotes,
+  });
+
   final String transcript;
+  final String userNotes;
 
   @override
   Widget build(BuildContext context) {
-    if (transcript.isEmpty) {
-      return const Center(child: Text('Transcript non disponible.'));
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              icon: const Icon(Icons.copy_rounded, size: 16),
-              label: const Text('Copier'),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: transcript));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Transcript copié dans le presse-papiers')),
-                );
-              },
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        _TranscriptSectionCard(
+          icon: Icons.subject_rounded,
+          title: 'Transcription',
+          body: transcript,
+          emptyMessage: 'Transcript non disponible.',
+          copyToast: 'Transcript copié dans le presse-papiers',
+        ),
+        const SizedBox(height: 12),
+        _TranscriptSectionCard(
+          icon: Icons.edit_note_rounded,
+          title: 'Mes notes',
+          body: userNotes,
+          emptyMessage:
+              'Aucune note prise pendant cette réunion.',
+          copyToast: 'Notes copiées dans le presse-papiers',
+        ),
+      ],
+    );
+  }
+}
+
+class _TranscriptSectionCard extends StatelessWidget {
+  const _TranscriptSectionCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.emptyMessage,
+    required this.copyToast,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final String emptyMessage;
+  final String copyToast;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isEmpty = body.trim().isEmpty;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: cs.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                if (!isEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('Copier'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: body));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(copyToast)),
+                      );
+                    },
+                  ),
+              ],
             ),
-          ),
-          SelectableText(transcript),
-        ],
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: isEmpty
+                  ? Text(
+                      emptyMessage,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          ),
+                    )
+                  : SelectableText(body),
+            ),
+          ],
+        ),
       ),
     );
   }
