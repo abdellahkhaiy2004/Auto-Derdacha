@@ -78,6 +78,79 @@ For VS Code users, add to `.vscode/launch.json`:
 
 ---
 
+## Running on an Android emulator via Android Studio
+
+This section covers the full path from a fresh Android Studio install to seeing the app running in an emulator.
+
+### A. Install and configure Android Studio
+
+1. Download **Android Studio** (Hedgehog 2023.1.1 or later) from https://developer.android.com/studio and run the installer.
+2. On first launch, follow the **Setup Wizard** — select *Standard* installation. It will install the Android SDK, build-tools, and a default emulator image automatically.
+3. After setup, open **SDK Manager** (top-right gear icon → *SDK Manager*):
+   - **SDK Platforms** tab → tick **Android 14 (API 34)** (or any API ≥ 21). Click *Apply*.
+   - **SDK Tools** tab → confirm these are installed: *Android SDK Build-Tools*, *Android Emulator*, *Android SDK Platform-Tools*.
+4. Open **Settings → Languages & Frameworks → Flutter** (install the Flutter plugin first if absent), point the *Flutter SDK path* to your Flutter installation directory (e.g. `C:\flutter`). Android Studio will auto-detect the Dart SDK bundled with it.
+
+### B. Enable Windows Developer Mode (required for Flutter symlinks)
+
+Flutter on Windows requires symlink support:
+
+1. Open **Settings → System → For developers** (or run `start ms-settings:developers` in a terminal).
+2. Toggle **Developer Mode** on.
+3. Restart the terminal / Android Studio if already open.
+
+### C. Create an Android Virtual Device (AVD)
+
+1. In Android Studio, open **Device Manager** (right sidebar or *View → Tool Windows → Device Manager*).
+2. Click **Create Device**.
+3. Choose a phone profile, e.g. **Pixel 7** → *Next*.
+4. Select a system image — pick **API 34 (x86_64, Android 14, Google Play)**. Download it if needed → *Next*.
+5. Leave AVD settings at their defaults → *Finish*.
+6. Press the **▶ Play** button next to the new AVD to boot it. Wait until the home screen is visible before proceeding.
+
+### D. Run auto-Derdacha on the emulator
+
+Open a terminal in the project root (`C:\Users\Admin\Desktop\auto-Dardacha`) and run:
+
+```powershell
+# 1. Make sure dependencies and generated code are up to date
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+
+# 2. Confirm Flutter sees the running emulator
+flutter devices
+# Expected output includes something like:
+#   sdk gphone64 x86 64 (mobile) • emulator-5554 • android-x64 • Android 14 (API 34)
+
+# 3. Launch the app with the env file
+flutter run --dart-define-from-file=.env
+```
+
+Flutter will automatically target the running emulator. If multiple devices are available, pass `-d emulator-5554` (use the ID shown by `flutter devices`).
+
+### E. Run from within Android Studio (alternative)
+
+1. Open the project folder in Android Studio (*File → Open → select auto-Dardacha*).
+2. Wait for Gradle sync to finish.
+3. Select your AVD from the device dropdown in the toolbar.
+4. Open **Run → Edit Configurations**, select *main.dart*, and add to *Additional run args*:
+   ```
+   --dart-define-from-file=.env
+   ```
+5. Click **▶ Run** (Shift+F10). The app will build and deploy to the emulator.
+
+### F. Emulator-specific notes
+
+| Topic | Note |
+|---|---|
+| Microphone on emulator | The Android emulator routes audio through the host machine's default microphone. Ensure your PC mic is enabled in Windows Sound settings. |
+| Notifications | Exact-alarm permissions may need to be granted manually: *Settings → Apps → auto_derdacha → Permissions → Alarms & reminders → Allow*. |
+| Hot reload | Press `r` in the terminal (or click the lightning bolt in Android Studio) to hot-reload after Dart changes. Full restart with `R`. |
+| Slow first build | Gradle downloads dependencies on first build (~5 min on a cold cache). Subsequent builds are incremental and much faster. |
+| `INSTALL_FAILED_USER_RESTRICTED` | Developer Mode is not enabled — see step B above. |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
